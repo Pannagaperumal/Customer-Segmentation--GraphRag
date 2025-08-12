@@ -1,0 +1,6 @@
+src/pipeline/__pycache__
+data/
+src/__pycache__
+
+src/retrieval/__pycache__
+src/common/__pycache__

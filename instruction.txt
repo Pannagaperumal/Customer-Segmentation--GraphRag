@@ -1,0 +1,103 @@
+New User Instructions
+
+This guide helps you get the project running on Windows PowerShell.
+
+1) Prerequisites
+- Install Python 3.10 or 3.11 (add to PATH)
+- Optional: Neo4j AuraDB or Neo4j Desktop if you want to load the graph
+
+2) Open a terminal and change directory
+- PowerShell:
+  cd C:\Users\Pannaga\Desktop\pro\chatbot
+
+3) Create and activate a virtual environment
+- Create:
+  python -m venv .venv
+- Activate (PowerShell):
+  .\.venv\Scripts\Activate.ps1
+  (If using Command Prompt: .venv\Scripts\activate)
+
+4) Install dependencies
+  pip install -r requirements.txt
+
+5) Generate data and build artifacts
+- Single command (recommended):
+  python -m src.cli build-all
+- Or run steps manually (equivalent to build-all):
+  python -m src.cli prep
+  python -m src.cli cluster
+  python -m src.cli embed
+  python -m src.cli index
+
+6) Ask questions via CLI
+  python -m src.cli ask "show clusters of android users who added to cart but not purchased"
+
+7) Run the API server (optional)
+- Start server:
+  uvicorn src.api.ask_api:app --host 0.0.0.0 --port 8000
+- Query the API (from another terminal):
+  POST http://localhost:8000/ask with JSON body:
+  {"query": "android users who abandoned checkout", "top_n": 5}
+
+8) Load clusters into Neo4j (optional)
+- Set environment variables:
+  setx NEO4J_URI "bolt+s://<your-auradb-uri>:7687"
+  setx NEO4J_USER "neo4j"
+  setx NEO4J_PASSWORD "<password>"
+  (Restart terminal after setx, or for current session use PowerShell: $env:NEO4J_URI=..., $env:NEO4J_USER=..., $env:NEO4J_PASSWORD=...)
+- Load:
+  python -m src.cli load-neo4j
+
+What’s included (maps to deliverables)
+- Customer-Journey Graph (Neo4j – free-tier safe):
+  - Raw events are stored only in Parquet under `data/raw/` (kept outside Neo4j).
+  - In Neo4j we store only `:Cluster {cluster_id, size, summary_text, embedding(optional)}` and up to 10 sampled `:Customer` nodes per cluster linked via `[:IN_CLUSTER]`. Use `python -m src.cli load-neo4j`.
+  - Optional `:Journey` summaries are not included by default (spec said optional).
+- GraphRAG retrieval:
+  - Minimal rule-based parsing of filters (device/category/funnel flags) from the natural-language query.
+  - Graph-side filtering over cluster metadata: if Neo4j is configured, it uses Cypher over `Cluster.summary_text`; otherwise it falls back to local Parquet filtering.
+  - Semantic retrieval over cluster summaries using free `sentence-transformers` (all-MiniLM-L6-v2) and a local FAISS/NumPy index.
+  - Output includes ranked clusters with `cluster_id`, `score`, `size`, `summary_text`, and sample `muids`.
+- Agentic "Ask & Show":
+  - CLI entrypoint: `python -m src.cli ask "<question>"`
+  - API entrypoint: `POST /ask` to the FastAPI server.
+
+Examples and submission artifacts
+- Example questions: see `examples/example_queries.md`.
+- Example outputs: 3 queries with results in `examples/sample_outputs.json`.
+- README: `README.md` covers setup, data build, Neo4j load, and how to run “ask”.
+
+Submission checklist
+- Small repo/notebook containing:
+  - README with setup and how to run “ask”.
+  - Loader for Neo4j: `src/graph/neo4j_loader.py` (clusters + sampled customers).
+  - GraphRAG entrypoints: CLI (`src/cli.py ask`) and API (`/ask` in `src/api/ask_api.py`).
+  - 2–3 example questions and returned clusters: `examples/` directory.
+
+9) Inspect raw data (optional)
+  python -m src.cli raw users --limit 5
+  python -m src.cli raw events --limit 5
+
+Data locations (created by the steps above)
+- data/raw/users.parquet
+- data/raw/events.parquet
+- data/processed/user_features.parquet
+- data/processed/clusters.parquet
+- data/processed/cluster_embeddings.npy
+- data/processed/faiss.index
+
+Troubleshooting
+- First run of embedding and search may download a model; allow a few minutes.
+- If FAISS is unavailable on your system, the app falls back to a NumPy index automatically.
+- If uvicorn is not found, ensure your virtual environment is activated.
+- If Neo4j endpoints return 404 for raw data, run the prep step or POST to /raw/users and /raw/events.
+
+Quick reference
+- Setup: python -m venv .venv && .\.venv\Scripts\Activate.ps1 && pip install -r requirements.txt
+- Pipeline (single): python -m src.cli build-all
+- Pipeline (manual): python -m src.cli prep && python -m src.cli cluster && python -m src.cli embed && python -m src.cli index
+- Ask (CLI): python -m src.cli ask "<your question>"
+- API: uvicorn src.api.ask_api:app --host 0.0.0.0 --port 8000
+- Neo4j load: python -m src.cli load-neo4j
+
+For more details, see README.md.
